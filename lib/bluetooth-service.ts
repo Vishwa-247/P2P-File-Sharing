@@ -249,6 +249,51 @@ export class BluetoothService {
     }
   }
 
+  async cleanup(): Promise<void> {
+    try {
+      // Stop notifications if active
+      if (this.characteristic) {
+        try {
+          await this.characteristic.stopNotifications()
+        } catch (error) {
+          console.error("Error stopping notifications:", error)
+        }
+      }
+
+      // Disconnect from device
+      await this.disconnect()
+
+      // Reset all properties
+      this.device = null
+      this.server = null
+      this.service = null
+      this.characteristic = null
+      this.receivedChunks = []
+      this.expectedFileSize = 0
+      this.receivedBytes = 0
+      this.fileName = ""
+      this.transferStartTime = 0
+
+      this.onConnectionStateChange?.("disconnected")
+    } catch (error) {
+      console.error("Error during cleanup:", error)
+    }
+  }
+
+  async requestDeviceAndConnect(): Promise<boolean> {
+    try {
+      const deviceRequested = await this.requestDevice()
+      if (!deviceRequested) {
+        return false
+      }
+
+      return await this.connect()
+    } catch (error) {
+      this.onError(`Failed to request device and connect: ${error}`)
+      return false
+    }
+  }
+
   isSupported(): boolean {
     return "bluetooth" in navigator
   }

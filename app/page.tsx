@@ -83,12 +83,6 @@ export default function P2PFileSharing() {
       setStatus("Initializing...")
 
       if (transferMethod === "webrtc") {
-        // WebRTC file sending
-        const session = await createSession()
-        setSessionId(session.id)
-        setShowQRCode(true)
-        setStatus("Waiting for receiver to connect...")
-
         webrtcService.current = new WebRTCService()
 
         webrtcService.current.onConnectionStateChange = (state) => {
@@ -108,7 +102,14 @@ export default function P2PFileSharing() {
           setStatus("")
         }
 
-        await webrtcService.current.createOffer(session.id)
+        // Create the WebRTC offer first
+        const offer = await webrtcService.current.createOffer()
+
+        // Then create session with the offer
+        const sessionId = await createSession(offer)
+        setSessionId(sessionId)
+        setShowQRCode(true)
+        setStatus("Waiting for receiver to connect...")
 
         // Start sending file once connected
         webrtcService.current.onConnectionStateChange = async (state) => {
@@ -138,8 +139,14 @@ export default function P2PFileSharing() {
           setStatus("")
         }
 
-        setStatus("Connecting to Bluetooth device...")
-        await bluetoothService.current.connect()
+        setStatus("Select Bluetooth device...")
+        const connected = await bluetoothService.current.requestDeviceAndConnect()
+
+        if (!connected) {
+          setError("Failed to connect to Bluetooth device")
+          return
+        }
+
         setStatus("Sending file via Bluetooth...")
         await bluetoothService.current.sendFile(selectedFile)
       }
@@ -211,8 +218,14 @@ export default function P2PFileSharing() {
           setStatus("")
         }
 
-        setStatus("Connecting to Bluetooth device...")
-        await bluetoothService.current.connect()
+        setStatus("Select Bluetooth device...")
+        const connected = await bluetoothService.current.requestDeviceAndConnect()
+
+        if (!connected) {
+          setError("Failed to connect to Bluetooth device")
+          return
+        }
+
         setStatus("Waiting for file...")
       }
     } catch (err) {
