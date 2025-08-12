@@ -45,8 +45,14 @@ export class BluetoothService {
       }
 
       this.device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ["12345678-1234-1234-1234-123456789abc"] }],
-        optionalServices: ["12345678-1234-1234-1234-123456789abc"],
+        acceptAllDevices: true,
+        optionalServices: [
+          "12345678-1234-1234-1234-123456789abc", // Custom file transfer service
+          "0000180f-0000-1000-8000-00805f9b34fb", // Battery service
+          "0000180a-0000-1000-8000-00805f9b34fb", // Device information
+          "generic_access", // Generic access service
+          "device_information", // Device information service
+        ],
       })
 
       this.device.addEventListener("gattserverdisconnected", () => {
@@ -55,7 +61,17 @@ export class BluetoothService {
 
       return true
     } catch (error) {
-      this.onError(`Failed to request Bluetooth device: ${error}`)
+      if (error instanceof Error) {
+        if (error.message.includes("User cancelled")) {
+          this.onError("Device selection was cancelled. Please try again and select a device.")
+        } else if (error.message.includes("No devices found")) {
+          this.onError("No Bluetooth devices found. Make sure the target device is discoverable.")
+        } else {
+          this.onError(`Bluetooth device request failed: ${error.message}`)
+        }
+      } else {
+        this.onError("Failed to request Bluetooth device. Please ensure Bluetooth is enabled.")
+      }
       return false
     }
   }
@@ -67,23 +83,50 @@ export class BluetoothService {
       }
 
       this.onConnectionStateChange?.("connecting")
-      this.server = await this.device.gatt?.connect()
+
+      const connectPromise = this.device.gatt?.connect()
+      if (!connectPromise) {
+        throw new Error("Device does not support GATT connections")
+      }
+
+      this.server = await Promise.race([
+        connectPromise,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Connection timeout")), 10000)),
+      ])
 
       if (!this.server) {
         throw new Error("Failed to connect to GATT server")
       }
 
-      this.service = await this.server.getPrimaryService("12345678-1234-1234-1234-123456789abc")
-      this.characteristic = await this.service.getCharacteristic("87654321-4321-4321-4321-cba987654321")
+      try {
+        this.service = await this.server.getPrimaryService("12345678-1234-1234-1234-123456789abc")
+        this.characteristic = await this.service.getCharacteristic("87654321-4321-4321-4321-cba987654321")
 
-      // Start notifications for receiving data
-      await this.characteristic.startNotifications()
-      this.characteristic.addEventListener("characteristicvaluechanged", this.handleDataReceived.bind(this))
+        // Start notifications for receiving data
+        await this.characteristic.startNotifications()
+        this.characteristic.addEventListener("characteristicvaluechanged", this.handleDataReceived.bind(this))
 
-      this.onConnectionStateChange?.("connected")
-      return true
+        this.onConnectionStateChange?.("connected")
+        return true
+      } catch (serviceError) {
+        this.onError(
+          "This device doesn't support P2P file transfer. Both devices need to have the same file sharing app installed and running.",
+        )
+        await this.disconnect()
+        return false
+      }
     } catch (error) {
-      this.onError(`Failed to connect: ${error}`)
+      if (error instanceof Error) {
+        if (error.message.includes("timeout")) {
+          this.onError("Connection timeout. Make sure the target device is nearby and has Bluetooth enabled.")
+        } else if (error.message.includes("GATT")) {
+          this.onError("Failed to establish GATT connection. The device may not be compatible.")
+        } else {
+          this.onError(`Connection failed: ${error.message}`)
+        }
+      } else {
+        this.onError("Failed to connect to the selected device.")
+      }
       return false
     }
   }
@@ -282,6 +325,8 @@ export class BluetoothService {
 
   async requestDeviceAndConnect(): Promise<boolean> {
     try {
+      this.onConnectionStateChange?.("requesting")
+
       const deviceRequested = await this.requestDevice()
       if (!deviceRequested) {
         return false
@@ -295,6 +340,19 @@ export class BluetoothService {
   }
 
   isSupported(): boolean {
-    return "bluetooth" in navigator
+    return "bluetooth" in navigator && "serviceWorker" in navigator
+  }
+
+  async checkDeviceCompatibility(): Promise<boolean> {
+    try {
+      if (!this.server) {
+        return false
+      }
+
+      const services = await this.server.getPrimaryServices()
+      return services.some((service) => service.uuid === "12345678-1234-1234-1234-123456789abc")
+    } catch {
+      return false
+    }
   }
 }

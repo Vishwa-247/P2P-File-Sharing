@@ -123,21 +123,19 @@ export default function P2PFileSharing() {
         }
       } else {
         // Bluetooth file sending
-        bluetoothService.current = new BluetoothService()
-
-        bluetoothService.current.onConnectionStateChange = (state) => {
-          setStatus(`Bluetooth: ${state}`)
-          setIsConnected(state === "connected")
-        }
-
-        bluetoothService.current.onTransferProgress = (progress) => {
-          setTransferProgress(progress)
-        }
-
-        bluetoothService.current.onError = (error) => {
-          setError(error)
-          setStatus("")
-        }
+        bluetoothService.current = new BluetoothService({
+          onConnectionStateChange: (state) => {
+            setStatus(`Bluetooth: ${state}`)
+            setIsConnected(state === "connected")
+          },
+          onProgress: (progress) => {
+            setTransferProgress(progress)
+          },
+          onError: (error) => {
+            setError(error)
+            setStatus("")
+          },
+        })
 
         setStatus("Select Bluetooth device...")
         const connected = await bluetoothService.current.requestDeviceAndConnect()
@@ -196,27 +194,24 @@ export default function P2PFileSharing() {
         setShowScanner(false)
       } else {
         // Bluetooth file receiving
-        bluetoothService.current = new BluetoothService()
-
-        bluetoothService.current.onConnectionStateChange = (state) => {
-          setStatus(`Bluetooth: ${state}`)
-          setIsConnected(state === "connected")
-        }
-
-        bluetoothService.current.onTransferProgress = (progress) => {
-          setTransferProgress(progress)
-        }
-
-        bluetoothService.current.onFileReceived = (file) => {
-          setReceivedFiles((prev) => [...prev, file])
-          setStatus("File received successfully!")
-          setTransferProgress(null)
-        }
-
-        bluetoothService.current.onError = (error) => {
-          setError(error)
-          setStatus("")
-        }
+        bluetoothService.current = new BluetoothService({
+          onConnectionStateChange: (state) => {
+            setStatus(`Bluetooth: ${state}`)
+            setIsConnected(state === "connected")
+          },
+          onProgress: (progress) => {
+            setTransferProgress(progress)
+          },
+          onFileReceived: (file) => {
+            setReceivedFiles((prev) => [...prev, { name: file.name, size: file.size, data: file }])
+            setStatus("File received successfully!")
+            setTransferProgress(null)
+          },
+          onError: (error) => {
+            setError(error)
+            setStatus("")
+          },
+        })
 
         setStatus("Select Bluetooth device...")
         const connected = await bluetoothService.current.requestDeviceAndConnect()
@@ -402,7 +397,7 @@ export default function P2PFileSharing() {
                 <CardDescription>Have the receiver scan this code to connect</CardDescription>
               </CardHeader>
               <CardContent>
-                <QRCodeDisplay sessionId={sessionId} />
+                <QRCodeDisplay url={`${window.location.origin}/join/${sessionId}`} />
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                   <Label className="text-sm font-medium">Session ID:</Label>
                   <p className="font-mono text-sm break-all">{sessionId}</p>
