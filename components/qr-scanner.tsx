@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { QRScanner } from "@/lib/qr-service"
+import { QRScanner as QRScannerService } from "@/lib/qr-service"
 import { Camera, CameraOff, Scan } from "lucide-react"
 
 interface QRScannerProps {
@@ -10,13 +10,13 @@ interface QRScannerProps {
   onError?: (error: string) => void
 }
 
-export function QRScannerComponent({ onScan, onError }: QRScannerProps) {
+export function QRScanner({ onScan, onError }: QRScannerProps) {
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState<string>("")
   const [manualInput, setManualInput] = useState<string>("")
   const [cameraPermission, setCameraPermission] = useState<"granted" | "denied" | "prompt">("prompt")
   const videoRef = useRef<HTMLVideoElement>(null)
-  const scannerRef = useRef<QRScanner | null>(null)
+  const scannerRef = useRef<QRScannerService | null>(null)
 
   useEffect(() => {
     checkCameraPermission()
@@ -36,7 +36,7 @@ export function QRScannerComponent({ onScan, onError }: QRScannerProps) {
 
     try {
       setError("")
-      scannerRef.current = new QRScanner(videoRef.current, (result) => {
+      scannerRef.current = new QRScannerService(videoRef.current, (result) => {
         // Extract session ID from URL if it's a full URL
         const sessionId = result.includes("/join/") ? result.split("/join/")[1] : result
 

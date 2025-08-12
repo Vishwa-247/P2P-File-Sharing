@@ -431,18 +431,37 @@ export class WebRTCService {
 }
 
 export async function createSession(offer: RTCSessionDescriptionInit): Promise<string> {
-  const response = await fetch("/api/offer", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ offer }),
-  })
+  try {
+    if (!offer || !offer.type || !offer.sdp) {
+      throw new Error("Invalid offer: missing type or sdp")
+    }
 
-  if (!response.ok) {
-    throw new Error("Failed to create session")
+    console.log("Creating session with offer:", { type: offer.type, sdpLength: offer.sdp.length })
+
+    const response = await fetch("/api/offer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ offer }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("Session creation failed:", response.status, errorText)
+      throw new Error(`Failed to create session: ${response.status} ${errorText}`)
+    }
+
+    const result = await response.json()
+    console.log("Session created successfully:", result.sessionId)
+
+    if (!result.sessionId) {
+      throw new Error("No session ID returned from server")
+    }
+
+    return result.sessionId
+  } catch (error) {
+    console.error("Error in createSession:", error)
+    throw error
   }
-
-  const { sessionId } = await response.json()
-  return sessionId
 }
 
 export async function getOffer(sessionId: string): Promise<RTCSessionDescriptionInit> {
