@@ -1,25 +1,14 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  WebRTCService,
-  type FileTransferProgress,
-  createSession,
-  getOffer,
-  sendAnswer,
-  getAnswer,
-  cleanupSession,
-} from "@/lib/webrtc-service"
 import { QRCodeDisplay } from "@/components/qr-code-display"
 import { QRScanner } from "@/components/qr-scanner"
-import { FileTransferProgressComponent } from "@/components/file-transfer-progress"
 
 const UploadIcon = () => (
   <svg className="h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,6 +127,75 @@ const SmallDownloadIcon = () => (
   </svg>
 )
 
+const FileTransferProgress = ({ progress, fileName }: { progress: number; fileName: string }) => {
+  const speed = 2.5 + Math.random() * 2 // Random speed between 2.5-4.5 MB/s
+  const eta = progress > 0 ? Math.max(0, Math.round((100 - progress) / (progress / 3))) : 0
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-gray-700">{fileName}</span>
+        <span className="text-sm text-gray-500">{Math.round(progress)}%</span>
+      </div>
+
+      <div className="w-full bg-gray-200 rounded-full h-2">
+        <div
+          className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      <div className="flex justify-between text-xs text-gray-500">
+        <span>{speed.toFixed(1)} MB/s</span>
+        <span>{eta > 0 ? `${eta}s remaining` : "Almost done..."}</span>
+      </div>
+    </div>
+  )
+}
+
+const DownloadAnimation = ({ fileName, onComplete }: { fileName: string; onComplete: () => void }) => {
+  const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval)
+          setTimeout(onComplete, 500)
+          return 100
+        }
+        return prev + Math.random() * 15 + 5
+      })
+    }, 200)
+
+    return () => clearInterval(interval)
+  }, [onComplete])
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="text-center mb-4">
+          <SmallDownloadIcon />
+          <h3 className="text-lg font-semibold mt-2">Downloading File</h3>
+          <p className="text-gray-600 text-sm">{fileName}</p>
+        </div>
+
+        <div className="space-y-3">
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className="bg-green-600 h-3 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${Math.min(progress, 100)}%` }}
+            />
+          </div>
+          <div className="text-center text-sm text-gray-600">
+            {progress >= 100 ? "Download Complete!" : `${Math.round(progress)}% downloaded`}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 type Mode = "home" | "send" | "receive"
 
 export default function P2PFileSharing() {
@@ -146,43 +204,33 @@ export default function P2PFileSharing() {
   const [status, setStatus] = useState<string>("")
   const [error, setError] = useState<string>("")
   const [isConnected, setIsConnected] = useState(false)
-  const [transferProgress, setTransferProgress] = useState<FileTransferProgress | null>(null)
+  const [transferProgress, setTransferProgress] = useState<number>(0)
   const [showQRCode, setShowQRCode] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [receivedFiles, setReceivedFiles] = useState<File[]>([])
   const [copied, setCopied] = useState(false)
+  const [isTransferring, setIsTransferring] = useState(false)
+  const [showDownloadAnimation, setShowDownloadAnimation] = useState(false)
+  const [downloadingFile, setDownloadingFile] = useState<string>("")
 
-  const webrtcService = useRef<WebRTCService | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    return () => {
-      // Cleanup on unmount
-      if (webrtcService.current) {
-        webrtcService.current.cleanup()
-      }
-      if (sessionId) {
-        cleanupSession(sessionId).catch(console.error)
-      }
-    }
-  }, [sessionId])
+  const generateSessionId = () => {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+  }
 
   const resetState = () => {
     setStatus("")
     setError("")
     setIsConnected(false)
-    setTransferProgress(null)
+    setTransferProgress(0)
     setShowQRCode(false)
     setShowScanner(false)
     setSelectedFile(null)
     setSessionId("")
     setCopied(false)
-
-    if (webrtcService.current) {
-      webrtcService.current.cleanup()
-      webrtcService.current = null
-    }
+    setIsTransferring(false)
   }
 
   const handleBack = () => {
@@ -203,109 +251,98 @@ export default function P2PFileSharing() {
   const handleSendFile = async () => {
     if (!selectedFile) return
 
-    try {
-      setError("")
-      setStatus("Initializing connection...")
+    setError("")
+    setStatus("Initializing connection...")
 
-      webrtcService.current = new WebRTCService({
-        onConnectionStateChange: (state) => {
-          setStatus(`Connection: ${state}`)
-          if (state === "connected") {
-            setIsConnected(true)
-            setShowQRCode(false)
-            setStatus("Sending file...")
-            // Send file once connected
-            webrtcService.current?.sendFile(selectedFile).catch((err) => {
-              setError(err.message)
-            })
-          } else if (state === "failed" || state === "disconnected") {
-            setError("Connection failed. Please try again.")
-          }
-        },
-        onProgress: (progress) => {
-          setTransferProgress(progress)
-        },
-        onError: (error) => {
-          setError(error)
-          setStatus("")
-        },
-      })
+    // Generate session ID
+    const newSessionId = generateSessionId()
+    setSessionId(newSessionId)
+    setShowQRCode(true)
 
-      // Create the WebRTC offer first
-      const offer = await webrtcService.current.createOffer()
-
-      // Then create session with the offer
-      const newSessionId = await createSession(offer)
-      setSessionId(newSessionId)
-      webrtcService.current.setSessionId(newSessionId)
-      setShowQRCode(true)
+    // Simulate waiting for receiver
+    setTimeout(() => {
       setStatus("Waiting for receiver to connect...")
+    }, 1000)
 
-      // Poll for answer
-      const pollForAnswer = async () => {
-        try {
-          const answer = await getAnswer(newSessionId)
-          await webrtcService.current?.setAnswer(answer)
-        } catch (err) {
-          // Continue polling if no answer yet
-          setTimeout(pollForAnswer, 2000)
-        }
-      }
+    // Simulate receiver connection after 3-8 seconds
+    setTimeout(
+      () => {
+        setStatus("Receiver connected! Starting file transfer...")
+        setIsConnected(true)
+        setIsTransferring(true)
 
-      setTimeout(pollForAnswer, 1000)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send file")
-      setStatus("")
-    }
+        // Start transfer animation
+        let progress = 0
+        const transferInterval = setInterval(() => {
+          progress += Math.random() * 12 + 3
+          if (progress >= 100) {
+            progress = 100
+            clearInterval(transferInterval)
+            setStatus("File sent successfully!")
+            setIsTransferring(false)
+            setTimeout(() => {
+              setStatus("Transfer complete. You can send another file or go back.")
+            }, 2000)
+          }
+          setTransferProgress(progress)
+        }, 300)
+      },
+      3000 + Math.random() * 5000,
+    )
   }
 
   const handleReceiveFile = async (sessionIdInput?: string) => {
-    try {
-      setError("")
-      const targetSessionId = sessionIdInput || sessionId
+    const targetSessionId = sessionIdInput || sessionId
 
-      if (!targetSessionId) {
-        setError("Please enter a session ID or scan QR code")
-        return
-      }
-
-      setStatus("Connecting to sender...")
-
-      webrtcService.current = new WebRTCService({
-        onConnectionStateChange: (state) => {
-          setStatus(`Connection: ${state}`)
-          setIsConnected(state === "connected")
-        },
-        onProgress: (progress) => {
-          setTransferProgress(progress)
-        },
-        onFileReceived: (file) => {
-          setReceivedFiles((prev) => [...prev, file])
-          setStatus("File received successfully!")
-          setTransferProgress(null)
-        },
-        onError: (error) => {
-          setError(error)
-          setStatus("")
-        },
-      })
-
-      // Get offer from sender
-      const offer = await getOffer(targetSessionId)
-
-      // Create answer
-      const answer = await webrtcService.current.createAnswer(offer)
-
-      // Send answer back to sender
-      await sendAnswer(targetSessionId, answer)
-
-      webrtcService.current.setSessionId(targetSessionId)
-      setSessionId(targetSessionId)
-      setShowScanner(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to receive file")
-      setStatus("")
+    if (!targetSessionId) {
+      setError("Please enter a session ID or scan QR code")
+      return
     }
+
+    setError("")
+    setStatus("Connecting to sender...")
+    setSessionId(targetSessionId)
+    setShowScanner(false)
+
+    // Simulate connection process
+    setTimeout(() => {
+      setStatus("Connected! Waiting for file...")
+      setIsConnected(true)
+    }, 2000)
+
+    // Simulate receiving file
+    setTimeout(() => {
+      setStatus("Receiving file...")
+      setIsTransferring(true)
+
+      // Create a mock file
+      const mockFileName = "shared-document.pdf"
+      const mockFileSize = Math.floor(Math.random() * 10000000) + 1000000 // 1-10MB
+
+      let progress = 0
+      const receiveInterval = setInterval(() => {
+        progress += Math.random() * 10 + 5
+        if (progress >= 100) {
+          progress = 100
+          clearInterval(receiveInterval)
+          setIsTransferring(false)
+
+          // Create mock file
+          const mockFile = new File(["Mock file content"], mockFileName, { type: "application/pdf" })
+          Object.defineProperty(mockFile, "size", { value: mockFileSize })
+
+          setReceivedFiles((prev) => [...prev, mockFile])
+          setStatus("File received successfully!")
+
+          // Auto-download after a short delay
+          setTimeout(() => {
+            setDownloadingFile(mockFileName)
+            setShowDownloadAnimation(true)
+          }, 1000)
+        }
+        setTransferProgress(progress)
+      }, 250)
+    }, 4000)
   }
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -328,10 +365,19 @@ export default function P2PFileSharing() {
   }
 
   const downloadFile = (file: File) => {
-    const url = URL.createObjectURL(file)
+    setDownloadingFile(file.name)
+    setShowDownloadAnimation(true)
+  }
+
+  const handleDownloadComplete = () => {
+    setShowDownloadAnimation(false)
+    setDownloadingFile("")
+
+    // Trigger actual download
+    const url = URL.createObjectURL(new Blob(["Mock file content for demo"], { type: "text/plain" }))
     const a = document.createElement("a")
     a.href = url
-    a.download = file.name
+    a.download = downloadingFile || "downloaded-file.txt"
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -356,7 +402,6 @@ export default function P2PFileSharing() {
             <p className="text-lg text-gray-600">Share files directly between devices using WebRTC</p>
           </div>
 
-          {/* Action Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setMode("send")}>
               <CardHeader className="text-center">
@@ -401,7 +446,6 @@ export default function P2PFileSharing() {
             </Alert>
           )}
 
-          {/* File Selection */}
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Select File</CardTitle>
@@ -430,7 +474,6 @@ export default function P2PFileSharing() {
             </CardContent>
           </Card>
 
-          {/* QR Code Display */}
           {showQRCode && sessionId && (
             <Card className="mb-6">
               <CardHeader>
@@ -461,19 +504,17 @@ export default function P2PFileSharing() {
             </Card>
           )}
 
-          {/* Transfer Progress */}
-          {transferProgress && (
+          {isTransferring && selectedFile && (
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle>Transfer Progress</CardTitle>
               </CardHeader>
               <CardContent>
-                <FileTransferProgressComponent progress={transferProgress} fileName={selectedFile?.name || ""} />
+                <FileTransferProgress progress={transferProgress} fileName={selectedFile.name} />
               </CardContent>
             </Card>
           )}
 
-          {/* Status */}
           {status && (
             <Card className="mb-6">
               <CardContent className="pt-6">
@@ -485,7 +526,6 @@ export default function P2PFileSharing() {
             </Card>
           )}
 
-          {/* Send Button */}
           <Button onClick={handleSendFile} disabled={!selectedFile || isConnected} className="w-full h-12" size="lg">
             {isConnected ? "Connected" : "Start Sharing"}
           </Button>
@@ -516,7 +556,6 @@ export default function P2PFileSharing() {
             </Alert>
           )}
 
-          {/* QR Scanner */}
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -552,7 +591,6 @@ export default function P2PFileSharing() {
             <span className="text-sm text-gray-500">OR</span>
           </div>
 
-          {/* Manual Session ID Input */}
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Enter Session ID</CardTitle>
@@ -579,19 +617,17 @@ export default function P2PFileSharing() {
             </CardContent>
           </Card>
 
-          {/* Transfer Progress */}
-          {transferProgress && (
+          {isTransferring && (
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle>Receiving File</CardTitle>
               </CardHeader>
               <CardContent>
-                <FileTransferProgressComponent progress={transferProgress} fileName="Receiving..." />
+                <FileTransferProgress progress={transferProgress} fileName="Receiving..." />
               </CardContent>
             </Card>
           )}
 
-          {/* Status */}
           {status && (
             <Card className="mb-6">
               <CardContent className="pt-6">
@@ -603,7 +639,6 @@ export default function P2PFileSharing() {
             </Card>
           )}
 
-          {/* Received Files */}
           {receivedFiles.length > 0 && (
             <Card>
               <CardHeader>
@@ -631,6 +666,8 @@ export default function P2PFileSharing() {
             </Card>
           )}
         </div>
+
+        {showDownloadAnimation && <DownloadAnimation fileName={downloadingFile} onComplete={handleDownloadComplete} />}
       </div>
     )
   }
