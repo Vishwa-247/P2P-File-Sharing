@@ -196,7 +196,72 @@ const DownloadAnimation = ({ fileName, onComplete }: { fileName: string; onCompl
   )
 }
 
-type Mode = "home" | "send" | "receive"
+const CongratulationsScreen = ({
+  mode,
+  fileName,
+  onBack,
+}: { mode: "send" | "receive"; fileName: string; onBack: () => void }) => (
+  <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 p-4">
+    <div className="max-w-2xl mx-auto">
+      <div className="flex items-center justify-between mb-8 p-4 bg-white rounded-lg shadow-sm">
+        <Button variant="outline" onClick={onBack} className="flex items-center gap-2 bg-transparent">
+          ← Back to Home
+        </Button>
+        <div className="text-sm text-gray-600">Transfer Complete</div>
+      </div>
+
+      <div className="text-center">
+        <div className="mb-6">
+          <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircleIcon />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">🎉 Congratulations!</h1>
+          <p className="text-lg text-gray-600">
+            {mode === "send"
+              ? `Your file "${fileName}" has been successfully sent!`
+              : `You have successfully received "${fileName}"!`}
+          </p>
+        </div>
+
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-center gap-2 text-green-600">
+                <CheckCircleIcon />
+                <span className="font-medium">Transfer Completed Successfully</span>
+              </div>
+
+              {mode === "receive" && (
+                <div className="text-sm text-gray-600">
+                  <p>The file has been automatically downloaded to your device.</p>
+                  <p>Check your Downloads folder to access the file.</p>
+                </div>
+              )}
+
+              <div className="pt-4 border-t">
+                <p className="text-sm text-gray-500">
+                  File: <span className="font-mono">{fileName}</span>
+                </p>
+                <p className="text-sm text-gray-500">Transfer method: WebRTC P2P</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-3">
+          <Button onClick={onBack} className="w-full" size="lg">
+            Transfer Another File
+          </Button>
+          <Button variant="outline" onClick={onBack} className="w-full bg-transparent">
+            Back to Home
+          </Button>
+        </div>
+      </div>
+    </div>
+  </div>
+)
+
+type Mode = "home" | "send" | "receive" | "congratulations"
 
 export default function P2PFileSharing() {
   const [mode, setMode] = useState<Mode>("home")
@@ -213,6 +278,7 @@ export default function P2PFileSharing() {
   const [isTransferring, setIsTransferring] = useState(false)
   const [showDownloadAnimation, setShowDownloadAnimation] = useState(false)
   const [downloadingFile, setDownloadingFile] = useState<string>("")
+  const [completedFileName, setCompletedFileName] = useState<string>("")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -262,32 +328,37 @@ export default function P2PFileSharing() {
     // Simulate waiting for receiver
     setTimeout(() => {
       setStatus("Waiting for receiver to connect...")
-    }, 1000)
+    }, 1500)
 
-    // Simulate receiver connection after 3-8 seconds
+    // Simulate receiver connection after 5-10 seconds
     setTimeout(
       () => {
-        setStatus("Receiver connected! Starting file transfer...")
+        setStatus("Receiver connected! Preparing file transfer...")
         setIsConnected(true)
-        setIsTransferring(true)
 
-        // Start transfer animation
-        let progress = 0
-        const transferInterval = setInterval(() => {
-          progress += Math.random() * 12 + 3
-          if (progress >= 100) {
-            progress = 100
-            clearInterval(transferInterval)
-            setStatus("File sent successfully!")
-            setIsTransferring(false)
-            setTimeout(() => {
-              setStatus("Transfer complete. You can send another file or go back.")
-            }, 2000)
-          }
-          setTransferProgress(progress)
-        }, 300)
+        setTimeout(() => {
+          setStatus("Starting secure file transfer...")
+          setIsTransferring(true)
+
+          let progress = 0
+          const transferInterval = setInterval(() => {
+            progress += Math.random() * 4 + 1 // Slower progress: 1-5% per interval
+            if (progress >= 100) {
+              progress = 100
+              clearInterval(transferInterval)
+              setStatus("File sent successfully!")
+              setIsTransferring(false)
+              setCompletedFileName(selectedFile.name)
+
+              setTimeout(() => {
+                setMode("congratulations")
+              }, 2000)
+            }
+            setTransferProgress(progress)
+          }, 800) // Slower interval: 800ms instead of 300ms
+        }, 2000)
       },
-      3000 + Math.random() * 5000,
+      5000 + Math.random() * 5000, // 5-10 seconds wait
     )
   }
 
@@ -308,41 +379,378 @@ export default function P2PFileSharing() {
     setTimeout(() => {
       setStatus("Connected! Waiting for file...")
       setIsConnected(true)
-    }, 2000)
+    }, 3000)
 
     // Simulate receiving file
     setTimeout(() => {
       setStatus("Receiving file...")
       setIsTransferring(true)
 
-      // Create a mock file
-      const mockFileName = "shared-document.pdf"
-      const mockFileSize = Math.floor(Math.random() * 10000000) + 1000000 // 1-10MB
+      const cheatSheetContent = `MERN + Next.js + Tailwind CSS Interview Cheat Sheet
+
+1. Next.js
+Q: What is Next.js?
+A: Next.js is like a super-powered React. It helps make websites faster by loading pages before you click them and lets you decide if you want the page made at build time (SSG) or each time someone visits (SSR).
+
+Q: Difference between SSR (Server-Side Rendering) and SSG (Static Site Generation)?
+A:
+• SSR: Make the page fresh every time someone visits (like cooking food when ordered).
+• SSG: Make the page once and give it to everyone (like ready-to-eat food).
+
+Q: What are API routes in Next.js?
+A: A way to make a small backend inside Next.js itself. Instead of making a separate Node server, you can create a file in /pages/api and boom — that's your API.
+
+Q: Difference between Next.js and React?
+A: React only runs in the browser. Next.js runs both in the browser and on the server, making it faster and better for SEO.
+
+2. React.js
+Q: What is the Virtual DOM?
+A: It's like a draft paper of your web page. React changes the draft first, and only updates the real page where needed. That makes it faster.
+
+Q: What are props?
+A: Props are like gift boxes. You send them from one component to another so the child can use them.
+
+Q: What are hooks?
+A: Hooks are special tools in React that give superpowers to your function components.
+• useState → Remember values
+• useEffect → Do something after the page changes
+• useContext → Share data with many components without passing props
+
+Q: Controlled vs Uncontrolled components?
+A:
+• Controlled: React is the boss and decides the value of inputs.
+• Uncontrolled: The browser decides the value of inputs.
+
+3. Tailwind CSS
+Q: What is Tailwind CSS?
+A: Tailwind is like Lego blocks for design. Instead of writing CSS files, you just put ready-made classes in your HTML and your design appears.
+
+Q: How to make something responsive in Tailwind?
+A: Use size labels like sm:, md:, lg: before classes.
+Example: sm:text-sm md:text-lg lg:text-xl
+
+Q: Can I customize Tailwind?
+A: Yes. You change the tailwind.config.js file and set your own colors, fonts, or sizes.
+
+4. Node.js & Express.js
+Q: What is Node.js?
+A: Node.js lets you run JavaScript outside the browser — like on a server.
+
+Q: What is Express.js?
+A: Express is a helper for Node.js that makes building APIs and websites easier.
+
+Q: What is middleware?
+A: Middleware is like a security guard. Before your request reaches the final route, middleware can check, change, or stop it.
+
+Q: How to create a simple GET API in Express?
+A:
+const express = require('express');
+const app = express();
+
+app.get('/hello', (req, res) => {
+  res.send('Hello World');
+});
+
+app.listen(3000);
+
+5. MongoDB
+Q: SQL vs NoSQL?
+A:
+• SQL: Data in tables (rows & columns).
+• NoSQL: Data in JSON-like documents.
+
+Q: How to save data in MongoDB using Mongoose?
+A:
+const User = new mongoose.model("User", { name: String });
+const newUser = new User({ name: "Vishwa" });
+await newUser.save();
+
+Q: What is indexing in MongoDB?
+A: It's like a book index — makes finding data faster.
+
+6. Git & General
+Q: How to create a new branch in Git?
+A:
+git checkout -b new-branch
+It's like making a copy of your code to work on separately.
+
+Q: How to merge in Git?
+A:
+git checkout main
+git merge new-branch
+It's like taking changes from your copy and putting them back into the main book.
+
+Advanced but Easy to Remember
+1. Debouncing — Wait before doing something until the user stops typing/clicking.
+2. Throttling — Allow something to happen only once in a set time.
+3. JWT — A special token that proves you are logged in.
+
+Technical Questions — Core Skills
+They'll test your knowledge in the stack mentioned in the JD.
+
+Next.js
+• Difference between Next.js and React.js
+• What are pages and routing in Next.js?
+• How does server-side rendering (SSR) differ from static site generation (SSG)?
+• How to use API routes in Next.js?
+
+React.js
+• Difference between functional and class components
+• How React hooks work (useState, useEffect, useContext)
+• How to pass props and handle state changes between components
+• What is virtual DOM and how React uses it?
+
+Tailwind CSS
+• How Tailwind differs from normal CSS
+• Example of applying responsive classes (e.g., sm:, md:, lg:)
+• How to customize Tailwind config
+
+Node.js & Express.js
+• How to create a basic Express server
+• Difference between middleware and route handlers
+• How to handle errors in Express
+• REST API structure (GET, POST, PUT, DELETE)
+
+MongoDB
+• Difference between SQL and NoSQL databases
+• How to define a schema in Mongoose
+• How to query documents in MongoDB (find, findOne, update, delete)
+• Indexing and when to use it
+
+Practical / Scenario-Based
+They might give small problem-solving tasks:
+• Create a REST API endpoint to fetch data from MongoDB
+• Build a simple form in React and send data to backend API
+• Optimize a slow-loading page in Next.js
+• Debug a piece of code that has state management issues
+
+Behavioral / Team Fit
+They want to see if you fit their work culture:
+• Tell me about a project you worked on with the MERN stack
+• How do you handle deadlines?
+• How do you collaborate with a designer or backend developer?
+• How do you debug when you face an error?
+
+Possible Small Coding Test
+You could be asked to:
+• Implement a to-do list app in React
+• Build an Express.js route for CRUD operations
+• Style a component using Tailwind CSS
+• Query a MongoDB database and return results
+
+How to Prepare Before Monday
+• Revise Next.js basics (pages, routing, SSR vs SSG, API routes)
+• Practice React hooks and state management
+• Build 1-2 small Node.js + MongoDB APIs
+• Revise Tailwind classes and how to make responsive UIs quickly
+• Brush up Git basics (commit, branch, merge, push)
+• Prepare to explain your past projects clearly`
+
+      const mockFileName = "MERN-NextJS-Interview-CheatSheet.txt"
 
       let progress = 0
       const receiveInterval = setInterval(() => {
-        progress += Math.random() * 10 + 5
+        progress += Math.random() * 3 + 2 // Slower progress: 2-5% per interval
         if (progress >= 100) {
           progress = 100
           clearInterval(receiveInterval)
           setIsTransferring(false)
 
-          // Create mock file
-          const mockFile = new File(["Mock file content"], mockFileName, { type: "application/pdf" })
-          Object.defineProperty(mockFile, "size", { value: mockFileSize })
+          // Create the actual cheat sheet file
+          const cheatSheetFile = new File([cheatSheetContent], mockFileName, { type: "text/plain" })
+          Object.defineProperty(cheatSheetFile, "size", { value: cheatSheetContent.length })
 
-          setReceivedFiles((prev) => [...prev, mockFile])
+          setReceivedFiles((prev) => [...prev, cheatSheetFile])
           setStatus("File received successfully!")
+          setCompletedFileName(mockFileName)
 
-          // Auto-download after a short delay
           setTimeout(() => {
             setDownloadingFile(mockFileName)
             setShowDownloadAnimation(true)
-          }, 1000)
+          }, 1500)
         }
         setTransferProgress(progress)
-      }, 250)
-    }, 4000)
+      }, 600) // Slower interval: 600ms
+    }, 6000) // Longer wait: 6 seconds
+  }
+
+  const handleDownloadComplete = () => {
+    setShowDownloadAnimation(false)
+
+    const cheatSheetContent = `MERN + Next.js + Tailwind CSS Interview Cheat Sheet
+
+1. Next.js
+Q: What is Next.js?
+A: Next.js is like a super-powered React. It helps make websites faster by loading pages before you click them and lets you decide if you want the page made at build time (SSG) or each time someone visits (SSR).
+
+Q: Difference between SSR (Server-Side Rendering) and SSG (Static Site Generation)?
+A:
+• SSR: Make the page fresh every time someone visits (like cooking food when ordered).
+• SSG: Make the page once and give it to everyone (like ready-to-eat food).
+
+Q: What are API routes in Next.js?
+A: A way to make a small backend inside Next.js itself. Instead of making a separate Node server, you can create a file in /pages/api and boom — that's your API.
+
+Q: Difference between Next.js and React?
+A: React only runs in the browser. Next.js runs both in the browser and on the server, making it faster and better for SEO.
+
+2. React.js
+Q: What is the Virtual DOM?
+A: It's like a draft paper of your web page. React changes the draft first, and only updates the real page where needed. That makes it faster.
+
+Q: What are props?
+A: Props are like gift boxes. You send them from one component to another so the child can use them.
+
+Q: What are hooks?
+A: Hooks are special tools in React that give superpowers to your function components.
+• useState → Remember values
+• useEffect → Do something after the page changes
+• useContext → Share data with many components without passing props
+
+Q: Controlled vs Uncontrolled components?
+A:
+• Controlled: React is the boss and decides the value of inputs.
+• Uncontrolled: The browser decides the value of inputs.
+
+3. Tailwind CSS
+Q: What is Tailwind CSS?
+A: Tailwind is like Lego blocks for design. Instead of writing CSS files, you just put ready-made classes in your HTML and your design appears.
+
+Q: How to make something responsive in Tailwind?
+A: Use size labels like sm:, md:, lg: before classes.
+Example: sm:text-sm md:text-lg lg:text-xl
+
+Q: Can I customize Tailwind?
+A: Yes. You change the tailwind.config.js file and set your own colors, fonts, or sizes.
+
+4. Node.js & Express.js
+Q: What is Node.js?
+A: Node.js lets you run JavaScript outside the browser — like on a server.
+
+Q: What is Express.js?
+A: Express is a helper for Node.js that makes building APIs and websites easier.
+
+Q: What is middleware?
+A: Middleware is like a security guard. Before your request reaches the final route, middleware can check, change, or stop it.
+
+Q: How to create a simple GET API in Express?
+A:
+const express = require('express');
+const app = express();
+
+app.get('/hello', (req, res) => {
+  res.send('Hello World');
+});
+
+app.listen(3000);
+
+5. MongoDB
+Q: SQL vs NoSQL?
+A:
+• SQL: Data in tables (rows & columns).
+• NoSQL: Data in JSON-like documents.
+
+Q: How to save data in MongoDB using Mongoose?
+A:
+const User = new mongoose.model("User", { name: String });
+const newUser = new User({ name: "Vishwa" });
+await newUser.save();
+
+Q: What is indexing in MongoDB?
+A: It's like a book index — makes finding data faster.
+
+6. Git & General
+Q: How to create a new branch in Git?
+A:
+git checkout -b new-branch
+It's like making a copy of your code to work on separately.
+
+Q: How to merge in Git?
+A:
+git checkout main
+git merge new-branch
+It's like taking changes from your copy and putting them back into the main book.
+
+Advanced but Easy to Remember
+1. Debouncing — Wait before doing something until the user stops typing/clicking.
+2. Throttling — Allow something to happen only once in a set time.
+3. JWT — A special token that proves you are logged in.
+
+Technical Questions — Core Skills
+They'll test your knowledge in the stack mentioned in the JD.
+
+Next.js
+• Difference between Next.js and React.js
+• What are pages and routing in Next.js?
+• How does server-side rendering (SSR) differ from static site generation (SSG)?
+• How to use API routes in Next.js?
+
+React.js
+• Difference between functional and class components
+• How React hooks work (useState, useEffect, useContext)
+• How to pass props and handle state changes between components
+• What is virtual DOM and how React uses it?
+
+Tailwind CSS
+• How Tailwind differs from normal CSS
+• Example of applying responsive classes (e.g., sm:, md:, lg:)
+• How to customize Tailwind config
+
+Node.js & Express.js
+• How to create a basic Express server
+• Difference between middleware and route handlers
+• How to handle errors in Express
+• REST API structure (GET, POST, PUT, DELETE)
+
+MongoDB
+• Difference between SQL and NoSQL databases
+• How to define a schema in Mongoose
+• How to query documents in MongoDB (find, findOne, update, delete)
+• Indexing and when to use it
+
+Practical / Scenario-Based
+They might give small problem-solving tasks:
+• Create a REST API endpoint to fetch data from MongoDB
+• Build a simple form in React and send data to backend API
+• Optimize a slow-loading page in Next.js
+• Debug a piece of code that has state management issues
+
+Behavioral / Team Fit
+They want to see if you fit their work culture:
+• Tell me about a project you worked on with the MERN stack
+• How do you handle deadlines?
+• How do you collaborate with a designer or backend developer?
+• How do you debug when you face an error?
+
+Possible Small Coding Test
+You could be asked to:
+• Implement a to-do list app in React
+• Build an Express.js route for CRUD operations
+• Style a component using Tailwind CSS
+• Query a MongoDB database and return results
+
+How to Prepare Before Monday
+• Revise Next.js basics (pages, routing, SSR vs SSG, API routes)
+• Practice React hooks and state management
+• Build 1-2 small Node.js + MongoDB APIs
+• Revise Tailwind classes and how to make responsive UIs quickly
+• Brush up Git basics (commit, branch, merge, push)
+• Prepare to explain your past projects clearly`
+
+    const url = URL.createObjectURL(new Blob([cheatSheetContent], { type: "text/plain" }))
+    const a = document.createElement("a")
+    a.href = url
+    a.download = downloadingFile || "MERN-NextJS-Interview-CheatSheet.txt"
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+
+    setDownloadingFile("")
+
+    setTimeout(() => {
+      setMode("congratulations")
+    }, 1000)
   }
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -367,21 +775,6 @@ export default function P2PFileSharing() {
   const downloadFile = (file: File) => {
     setDownloadingFile(file.name)
     setShowDownloadAnimation(true)
-  }
-
-  const handleDownloadComplete = () => {
-    setShowDownloadAnimation(false)
-    setDownloadingFile("")
-
-    // Trigger actual download
-    const url = URL.createObjectURL(new Blob(["Mock file content for demo"], { type: "text/plain" }))
-    const a = document.createElement("a")
-    a.href = url
-    a.download = downloadingFile || "downloaded-file.txt"
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
   }
 
   const formatFileSize = (bytes: number) => {
@@ -669,6 +1062,17 @@ export default function P2PFileSharing() {
 
         {showDownloadAnimation && <DownloadAnimation fileName={downloadingFile} onComplete={handleDownloadComplete} />}
       </div>
+    )
+  }
+
+  // Congratulations Screen
+  if (mode === "congratulations") {
+    return (
+      <CongratulationsScreen
+        mode={completedFileName.includes("CheatSheet") ? "receive" : "send"}
+        fileName={completedFileName}
+        onBack={handleBack}
+      />
     )
   }
 
