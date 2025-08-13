@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, Download, QrCode, Camera, CheckCircle, AlertCircle, Clock, Copy, Check } from "lucide-react"
 import {
   WebRTCService,
   type FileTransferProgress,
@@ -21,6 +20,123 @@ import {
 import { QRCodeDisplay } from "@/components/qr-code-display"
 import { QRScanner } from "@/components/qr-scanner"
 import { FileTransferProgressComponent } from "@/components/file-transfer-progress"
+
+const UploadIcon = () => (
+  <svg className="h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+    />
+  </svg>
+)
+
+const DownloadIcon = () => (
+  <svg className="h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+    />
+  </svg>
+)
+
+const QrCodeIcon = () => (
+  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
+    />
+  </svg>
+)
+
+const CameraIcon = () => (
+  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+    />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+)
+
+const CheckCircleIcon = () => (
+  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+)
+
+const AlertCircleIcon = () => (
+  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+)
+
+const ClockIcon = () => (
+  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+)
+
+const CopyIcon = () => (
+  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+    />
+  </svg>
+)
+
+const CheckIcon = () => (
+  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+  </svg>
+)
+
+const SmallUploadIcon = () => (
+  <svg className="h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+    />
+  </svg>
+)
+
+const SmallDownloadIcon = () => (
+  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+    />
+  </svg>
+)
 
 type Mode = "home" | "send" | "receive"
 
@@ -244,7 +360,7 @@ export default function P2PFileSharing() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setMode("send")}>
               <CardHeader className="text-center">
-                <Upload className="h-12 w-12 mx-auto text-blue-600 mb-4" />
+                <UploadIcon />
                 <CardTitle>Send Files</CardTitle>
                 <CardDescription>Share files with another device using QR codes</CardDescription>
               </CardHeader>
@@ -252,7 +368,7 @@ export default function P2PFileSharing() {
 
             <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setMode("receive")}>
               <CardHeader className="text-center">
-                <Download className="h-12 w-12 mx-auto text-green-600 mb-4" />
+                <DownloadIcon />
                 <CardTitle>Receive Files</CardTitle>
                 <CardDescription>Scan QR code or enter session ID to receive files</CardDescription>
               </CardHeader>
@@ -280,7 +396,7 @@ export default function P2PFileSharing() {
 
           {error && (
             <Alert className="mb-6 border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertCircleIcon />
               <AlertDescription className="text-red-800">{error}</AlertDescription>
             </Alert>
           )}
@@ -297,7 +413,7 @@ export default function P2PFileSharing() {
                 onDragOver={handleDragOver}
                 onClick={() => fileInputRef.current?.click()}
               >
-                <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <SmallUploadIcon />
                 {selectedFile ? (
                   <div>
                     <p className="font-medium text-gray-900">{selectedFile.name}</p>
@@ -319,7 +435,7 @@ export default function P2PFileSharing() {
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <QrCode className="h-5 w-5" />
+                  <QrCodeIcon />
                   Share this QR Code
                 </CardTitle>
                 <CardDescription>Have the receiver scan this code to connect</CardDescription>
@@ -336,7 +452,7 @@ export default function P2PFileSharing() {
                       onClick={copySessionId}
                       className="flex items-center gap-1 bg-transparent"
                     >
-                      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      {copied ? <CheckIcon /> : <CopyIcon />}
                       {copied ? "Copied!" : "Copy"}
                     </Button>
                   </div>
@@ -352,7 +468,7 @@ export default function P2PFileSharing() {
                 <CardTitle>Transfer Progress</CardTitle>
               </CardHeader>
               <CardContent>
-                <FileTransferProgressComponent progress={transferProgress} />
+                <FileTransferProgressComponent progress={transferProgress} fileName={selectedFile?.name || ""} />
               </CardContent>
             </Card>
           )}
@@ -362,7 +478,7 @@ export default function P2PFileSharing() {
             <Card className="mb-6">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-blue-600" />
+                  <ClockIcon />
                   <span className="text-sm font-medium">{status}</span>
                 </div>
               </CardContent>
@@ -395,7 +511,7 @@ export default function P2PFileSharing() {
 
           {error && (
             <Alert className="mb-6 border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertCircleIcon />
               <AlertDescription className="text-red-800">{error}</AlertDescription>
             </Alert>
           )}
@@ -404,7 +520,7 @@ export default function P2PFileSharing() {
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Camera className="h-5 w-5" />
+                <CameraIcon />
                 Scan QR Code
               </CardTitle>
               <CardDescription>Scan the QR code from the sender's device</CardDescription>
@@ -425,7 +541,7 @@ export default function P2PFileSharing() {
                 </div>
               ) : (
                 <Button onClick={() => setShowScanner(true)} className="w-full" variant="outline">
-                  <Camera className="h-4 w-4 mr-2" />
+                  <CameraIcon />
                   Start Camera Scanner
                 </Button>
               )}
@@ -470,7 +586,7 @@ export default function P2PFileSharing() {
                 <CardTitle>Receiving File</CardTitle>
               </CardHeader>
               <CardContent>
-                <FileTransferProgressComponent progress={transferProgress} />
+                <FileTransferProgressComponent progress={transferProgress} fileName="Receiving..." />
               </CardContent>
             </Card>
           )}
@@ -480,7 +596,7 @@ export default function P2PFileSharing() {
             <Card className="mb-6">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-green-600" />
+                  <ClockIcon />
                   <span className="text-sm font-medium">{status}</span>
                 </div>
               </CardContent>
@@ -492,7 +608,7 @@ export default function P2PFileSharing() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <CheckCircleIcon />
                   Received Files
                 </CardTitle>
               </CardHeader>
@@ -505,7 +621,7 @@ export default function P2PFileSharing() {
                         <p className="text-sm text-gray-500">{formatFileSize(file.size)}</p>
                       </div>
                       <Button onClick={() => downloadFile(file)} size="sm" variant="outline">
-                        <Download className="h-4 w-4 mr-2" />
+                        <SmallDownloadIcon />
                         Download
                       </Button>
                     </div>
