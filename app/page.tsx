@@ -4,7 +4,6 @@ import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { QRCodeDisplay } from "@/components/qr-code-display"
@@ -366,22 +365,14 @@ export default function P2PFileSharing() {
     const targetSessionId = sessionIdInput || sessionId
 
     if (!targetSessionId) {
-      setError("Please enter a session ID or scan QR code")
       return
     }
 
-    setError("")
-    setStatus("Connecting to sender...")
+    setStatus("Connected! Preparing to receive file...")
     setSessionId(targetSessionId)
     setShowScanner(false)
+    setIsConnected(true)
 
-    // Simulate connection process
-    setTimeout(() => {
-      setStatus("Connected! Waiting for file...")
-      setIsConnected(true)
-    }, 3000)
-
-    // Simulate receiving file
     setTimeout(() => {
       setStatus("Receiving file...")
       setIsTransferring(true)
@@ -942,20 +933,13 @@ How to Prepare Before Monday
             </div>
           </div>
 
-          {error && (
-            <Alert className="mb-6 border-red-200 bg-red-50">
-              <AlertCircleIcon />
-              <AlertDescription className="text-red-800">{error}</AlertDescription>
-            </Alert>
-          )}
-
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CameraIcon />
-                Scan QR Code
+                Scan QR Code or Enter Session ID
               </CardTitle>
-              <CardDescription>Scan the QR code from the sender's device</CardDescription>
+              <CardDescription>Connect to a sender to receive files</CardDescription>
             </CardHeader>
             <CardContent>
               {showScanner ? (
@@ -965,7 +949,6 @@ How to Prepare Before Monday
                       setSessionId(sessionId)
                       handleReceiveFile(sessionId)
                     }}
-                    onError={(error) => setError(error)}
                   />
                   <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full mt-4">
                     Cancel Scanning
@@ -977,36 +960,6 @@ How to Prepare Before Monday
                   Start Camera Scanner
                 </Button>
               )}
-            </CardContent>
-          </Card>
-
-          <div className="text-center mb-6">
-            <span className="text-sm text-gray-500">OR</span>
-          </div>
-
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Enter Session ID</CardTitle>
-              <CardDescription>Manually enter the session ID from the sender</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="sessionId">Session ID</Label>
-                <Input
-                  id="sessionId"
-                  value={sessionId}
-                  onChange={(e) => setSessionId(e.target.value)}
-                  placeholder="Enter session ID..."
-                  className="font-mono"
-                />
-              </div>
-              <Button
-                onClick={() => handleReceiveFile()}
-                disabled={!sessionId.trim() || isConnected}
-                className="w-full"
-              >
-                Connect to Sender
-              </Button>
             </CardContent>
           </Card>
 

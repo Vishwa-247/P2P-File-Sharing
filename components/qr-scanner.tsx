@@ -48,10 +48,8 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
       setIsScanning(true)
       setCameraPermission("granted")
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to start camera"
-      setError(errorMsg)
+      setIsScanning(false)
       setCameraPermission("denied")
-      onError?.(errorMsg)
     }
   }
 
@@ -135,17 +133,6 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
             </Button>
           )}
         </div>
-
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-600">{error}</p>
-            {cameraPermission === "denied" && (
-              <p className="text-xs text-red-500 mt-1">
-                Please enable camera permissions in your browser settings and refresh the page.
-              </p>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Manual Input Fallback */}
