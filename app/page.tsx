@@ -8,19 +8,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, Download, Wifi, Bluetooth, QrCode, Camera, CheckCircle, AlertCircle, Clock } from "lucide-react"
-import { WebRTCService, type FileTransferProgress, createSession, cleanupSession } from "@/lib/webrtc-service"
-import { BluetoothService } from "@/lib/bluetooth-service"
+import { Upload, Download, QrCode, Camera, CheckCircle, AlertCircle, Clock, Copy, Check } from "lucide-react"
+import {
+  WebRTCService,
+  type FileTransferProgress,
+  createSession,
+  getOffer,
+  sendAnswer,
+  getAnswer,
+  cleanupSession,
+} from "@/lib/webrtc-service"
 import { QRCodeDisplay } from "@/components/qr-code-display"
 import { QRScanner } from "@/components/qr-scanner"
 import { FileTransferProgressComponent } from "@/components/file-transfer-progress"
 
-type TransferMethod = "webrtc" | "bluetooth"
 type Mode = "home" | "send" | "receive"
 
 export default function P2PFileSharing() {
   const [mode, setMode] = useState<Mode>("home")
-  const [transferMethod, setTransferMethod] = useState<TransferMethod>("webrtc")
   const [sessionId, setSessionId] = useState<string>("")
   const [status, setStatus] = useState<string>("")
   const [error, setError] = useState<string>("")
@@ -29,10 +34,10 @@ export default function P2PFileSharing() {
   const [showQRCode, setShowQRCode] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [receivedFiles, setReceivedFiles] = useState<Array<{ name: string; size: number; data: ArrayBuffer }>>([])
+  const [receivedFiles, setReceivedFiles] = useState<File[]>([])
+  const [copied, setCopied] = useState(false)
 
   const webrtcService = useRef<WebRTCService | null>(null)
-  const bluetoothService = useRef<BluetoothService | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -40,9 +45,6 @@ export default function P2PFileSharing() {
       // Cleanup on unmount
       if (webrtcService.current) {
         webrtcService.current.cleanup()
-      }
-      if (bluetoothService.current) {
-        bluetoothService.current.cleanup()
       }
       if (sessionId) {
         cleanupSession(sessionId).catch(console.error)
@@ -59,14 +61,11 @@ export default function P2PFileSharing() {
     setShowScanner(false)
     setSelectedFile(null)
     setSessionId("")
+    setCopied(false)
 
     if (webrtcService.current) {
       webrtcService.current.cleanup()
       webrtcService.current = null
-    }
-    if (bluetoothService.current) {
-      bluetoothService.current.cleanup()
-      bluetoothService.current = null
     }
   }
 
@@ -75,79 +74,69 @@ export default function P2PFileSharing() {
     setMode("home")
   }
 
+  const copySessionId = async () => {
+    try {
+      await navigator.clipboard.writeText(sessionId)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy session ID:", err)
+    }
+  }
+
   const handleSendFile = async () => {
     if (!selectedFile) return
 
     try {
       setError("")
-      setStatus("Initializing...")
+      setStatus("Initializing connection...")
 
-      if (transferMethod === "webrtc") {
-        webrtcService.current = new WebRTCService()
-
-        webrtcService.current.onConnectionStateChange = (state) => {
-          setStatus(`Connection: ${state}`)
-          if (state === "connected") {
-            setIsConnected(true)
-            setShowQRCode(false)
-          }
-        }
-
-        webrtcService.current.onTransferProgress = (progress) => {
-          setTransferProgress(progress)
-        }
-
-        webrtcService.current.onError = (error) => {
-          setError(error)
-          setStatus("")
-        }
-
-        // Create the WebRTC offer first
-        const offer = await webrtcService.current.createOffer()
-
-        // Then create session with the offer
-        const sessionId = await createSession(offer)
-        setSessionId(sessionId)
-        setShowQRCode(true)
-        setStatus("Waiting for receiver to connect...")
-
-        // Start sending file once connected
-        webrtcService.current.onConnectionStateChange = async (state) => {
+      webrtcService.current = new WebRTCService({
+        onConnectionStateChange: (state) => {
           setStatus(`Connection: ${state}`)
           if (state === "connected") {
             setIsConnected(true)
             setShowQRCode(false)
             setStatus("Sending file...")
-            await webrtcService.current!.sendFile(selectedFile)
+            // Send file once connected
+            webrtcService.current?.sendFile(selectedFile).catch((err) => {
+              setError(err.message)
+            })
+          } else if (state === "failed" || state === "disconnected") {
+            setError("Connection failed. Please try again.")
           }
+        },
+        onProgress: (progress) => {
+          setTransferProgress(progress)
+        },
+        onError: (error) => {
+          setError(error)
+          setStatus("")
+        },
+      })
+
+      // Create the WebRTC offer first
+      const offer = await webrtcService.current.createOffer()
+
+      // Then create session with the offer
+      const newSessionId = await createSession(offer)
+      setSessionId(newSessionId)
+      webrtcService.current.setSessionId(newSessionId)
+      setShowQRCode(true)
+      setStatus("Waiting for receiver to connect...")
+
+      // Poll for answer
+      const pollForAnswer = async () => {
+        try {
+          const answer = await getAnswer(newSessionId)
+          await webrtcService.current?.setAnswer(answer)
+        } catch (err) {
+          // Continue polling if no answer yet
+          setTimeout(pollForAnswer, 2000)
         }
-      } else {
-        // Bluetooth file sending
-        bluetoothService.current = new BluetoothService({
-          onConnectionStateChange: (state) => {
-            setStatus(`Bluetooth: ${state}`)
-            setIsConnected(state === "connected")
-          },
-          onProgress: (progress) => {
-            setTransferProgress(progress)
-          },
-          onError: (error) => {
-            setError(error)
-            setStatus("")
-          },
-        })
-
-        setStatus("Select Bluetooth device...")
-        const connected = await bluetoothService.current.requestDeviceAndConnect()
-
-        if (!connected) {
-          setError("Failed to connect to Bluetooth device")
-          return
-        }
-
-        setStatus("Sending file via Bluetooth...")
-        await bluetoothService.current.sendFile(selectedFile)
       }
+
+      setTimeout(pollForAnswer, 1000)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send file")
       setStatus("")
@@ -159,70 +148,44 @@ export default function P2PFileSharing() {
       setError("")
       const targetSessionId = sessionIdInput || sessionId
 
-      if (!targetSessionId && transferMethod === "webrtc") {
+      if (!targetSessionId) {
         setError("Please enter a session ID or scan QR code")
         return
       }
 
-      if (transferMethod === "webrtc") {
-        setStatus("Connecting to sender...")
+      setStatus("Connecting to sender...")
 
-        webrtcService.current = new WebRTCService()
-
-        webrtcService.current.onConnectionStateChange = (state) => {
+      webrtcService.current = new WebRTCService({
+        onConnectionStateChange: (state) => {
           setStatus(`Connection: ${state}`)
           setIsConnected(state === "connected")
-        }
-
-        webrtcService.current.onTransferProgress = (progress) => {
+        },
+        onProgress: (progress) => {
           setTransferProgress(progress)
-        }
-
-        webrtcService.current.onFileReceived = (file) => {
+        },
+        onFileReceived: (file) => {
           setReceivedFiles((prev) => [...prev, file])
           setStatus("File received successfully!")
           setTransferProgress(null)
-        }
-
-        webrtcService.current.onError = (error) => {
+        },
+        onError: (error) => {
           setError(error)
           setStatus("")
-        }
+        },
+      })
 
-        await webrtcService.current.joinSession(targetSessionId)
-        setSessionId(targetSessionId)
-        setShowScanner(false)
-      } else {
-        // Bluetooth file receiving
-        bluetoothService.current = new BluetoothService({
-          onConnectionStateChange: (state) => {
-            setStatus(`Bluetooth: ${state}`)
-            setIsConnected(state === "connected")
-          },
-          onProgress: (progress) => {
-            setTransferProgress(progress)
-          },
-          onFileReceived: (file) => {
-            setReceivedFiles((prev) => [...prev, { name: file.name, size: file.size, data: file }])
-            setStatus("File received successfully!")
-            setTransferProgress(null)
-          },
-          onError: (error) => {
-            setError(error)
-            setStatus("")
-          },
-        })
+      // Get offer from sender
+      const offer = await getOffer(targetSessionId)
 
-        setStatus("Select Bluetooth device...")
-        const connected = await bluetoothService.current.requestDeviceAndConnect()
+      // Create answer
+      const answer = await webrtcService.current.createAnswer(offer)
 
-        if (!connected) {
-          setError("Failed to connect to Bluetooth device")
-          return
-        }
+      // Send answer back to sender
+      await sendAnswer(targetSessionId, answer)
 
-        setStatus("Waiting for file...")
-      }
+      webrtcService.current.setSessionId(targetSessionId)
+      setSessionId(targetSessionId)
+      setShowScanner(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to receive file")
       setStatus("")
@@ -248,9 +211,8 @@ export default function P2PFileSharing() {
     event.preventDefault()
   }
 
-  const downloadFile = (file: { name: string; size: number; data: ArrayBuffer }) => {
-    const blob = new Blob([file.data])
-    const url = URL.createObjectURL(blob)
+  const downloadFile = (file: File) => {
+    const url = URL.createObjectURL(file)
     const a = document.createElement("a")
     a.href = url
     a.download = file.name
@@ -275,36 +237,8 @@ export default function P2PFileSharing() {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">P2P File Sharing</h1>
-            <p className="text-lg text-gray-600">Share files directly between devices using WebRTC or Bluetooth</p>
+            <p className="text-lg text-gray-600">Share files directly between devices using WebRTC</p>
           </div>
-
-          {/* Transfer Method Selection */}
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Choose Transfer Method</CardTitle>
-              <CardDescription>Select how you want to transfer files</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Button
-                  variant={transferMethod === "webrtc" ? "default" : "outline"}
-                  className="h-20 flex flex-col gap-2"
-                  onClick={() => setTransferMethod("webrtc")}
-                >
-                  <Wifi className="h-6 w-6" />
-                  <span>WebRTC (Internet)</span>
-                </Button>
-                <Button
-                  variant={transferMethod === "bluetooth" ? "default" : "outline"}
-                  className="h-20 flex flex-col gap-2"
-                  onClick={() => setTransferMethod("bluetooth")}
-                >
-                  <Bluetooth className="h-6 w-6" />
-                  <span>Bluetooth (Local)</span>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Action Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -312,9 +246,7 @@ export default function P2PFileSharing() {
               <CardHeader className="text-center">
                 <Upload className="h-12 w-12 mx-auto text-blue-600 mb-4" />
                 <CardTitle>Send Files</CardTitle>
-                <CardDescription>
-                  Share files with another device using {transferMethod === "webrtc" ? "QR codes" : "Bluetooth pairing"}
-                </CardDescription>
+                <CardDescription>Share files with another device using QR codes</CardDescription>
               </CardHeader>
             </Card>
 
@@ -322,11 +254,7 @@ export default function P2PFileSharing() {
               <CardHeader className="text-center">
                 <Download className="h-12 w-12 mx-auto text-green-600 mb-4" />
                 <CardTitle>Receive Files</CardTitle>
-                <CardDescription>
-                  {transferMethod === "webrtc"
-                    ? "Scan QR code or enter session ID to receive files"
-                    : "Connect via Bluetooth to receive files"}
-                </CardDescription>
+                <CardDescription>Scan QR code or enter session ID to receive files</CardDescription>
               </CardHeader>
             </Card>
           </div>
@@ -346,7 +274,7 @@ export default function P2PFileSharing() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Send Files</h1>
-              <p className="text-gray-600">Using {transferMethod === "webrtc" ? "WebRTC" : "Bluetooth"}</p>
+              <p className="text-gray-600">Using WebRTC</p>
             </div>
           </div>
 
@@ -400,7 +328,18 @@ export default function P2PFileSharing() {
                 <QRCodeDisplay url={`${window.location.origin}/join/${sessionId}`} />
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                   <Label className="text-sm font-medium">Session ID:</Label>
-                  <p className="font-mono text-sm break-all">{sessionId}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="font-mono text-sm break-all flex-1">{sessionId}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={copySessionId}
+                      className="flex items-center gap-1 bg-transparent"
+                    >
+                      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      {copied ? "Copied!" : "Copy"}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -450,7 +389,7 @@ export default function P2PFileSharing() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Receive Files</h1>
-              <p className="text-gray-600">Using {transferMethod === "webrtc" ? "WebRTC" : "Bluetooth"}</p>
+              <p className="text-gray-600">Using WebRTC</p>
             </div>
           </div>
 
@@ -461,89 +400,68 @@ export default function P2PFileSharing() {
             </Alert>
           )}
 
-          {transferMethod === "webrtc" && (
-            <>
-              {/* QR Scanner */}
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Camera className="h-5 w-5" />
-                    Scan QR Code
-                  </CardTitle>
-                  <CardDescription>Scan the QR code from the sender's device</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {showScanner ? (
-                    <div>
-                      <QRScanner
-                        onScan={(sessionId) => {
-                          setSessionId(sessionId)
-                          handleReceiveFile(sessionId)
-                        }}
-                        onError={(error) => setError(error)}
-                      />
-                      <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full mt-4">
-                        Cancel Scanning
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button onClick={() => setShowScanner(true)} className="w-full" variant="outline">
-                      <Camera className="h-4 w-4 mr-2" />
-                      Start Camera Scanner
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-
-              <div className="text-center mb-6">
-                <span className="text-sm text-gray-500">OR</span>
-              </div>
-
-              {/* Manual Session ID Input */}
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle>Enter Session ID</CardTitle>
-                  <CardDescription>Manually enter the session ID from the sender</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="sessionId">Session ID</Label>
-                    <Input
-                      id="sessionId"
-                      value={sessionId}
-                      onChange={(e) => setSessionId(e.target.value)}
-                      placeholder="Enter session ID..."
-                      className="font-mono"
-                    />
-                  </div>
-                  <Button
-                    onClick={() => handleReceiveFile()}
-                    disabled={!sessionId.trim() || isConnected}
-                    className="w-full"
-                  >
-                    Connect to Sender
+          {/* QR Scanner */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Camera className="h-5 w-5" />
+                Scan QR Code
+              </CardTitle>
+              <CardDescription>Scan the QR code from the sender's device</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {showScanner ? (
+                <div>
+                  <QRScanner
+                    onScan={(sessionId) => {
+                      setSessionId(sessionId)
+                      handleReceiveFile(sessionId)
+                    }}
+                    onError={(error) => setError(error)}
+                  />
+                  <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full mt-4">
+                    Cancel Scanning
                   </Button>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          {transferMethod === "bluetooth" && (
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bluetooth className="h-5 w-5" />
-                  Bluetooth Connection
-                </CardTitle>
-                <CardDescription>Connect to a nearby Bluetooth device to receive files</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button onClick={() => handleReceiveFile()} disabled={isConnected} className="w-full">
-                  {isConnected ? "Connected" : "Connect via Bluetooth"}
+                </div>
+              ) : (
+                <Button onClick={() => setShowScanner(true)} className="w-full" variant="outline">
+                  <Camera className="h-4 w-4 mr-2" />
+                  Start Camera Scanner
                 </Button>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="text-center mb-6">
+            <span className="text-sm text-gray-500">OR</span>
+          </div>
+
+          {/* Manual Session ID Input */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Enter Session ID</CardTitle>
+              <CardDescription>Manually enter the session ID from the sender</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="sessionId">Session ID</Label>
+                <Input
+                  id="sessionId"
+                  value={sessionId}
+                  onChange={(e) => setSessionId(e.target.value)}
+                  placeholder="Enter session ID..."
+                  className="font-mono"
+                />
+              </div>
+              <Button
+                onClick={() => handleReceiveFile()}
+                disabled={!sessionId.trim() || isConnected}
+                className="w-full"
+              >
+                Connect to Sender
+              </Button>
+            </CardContent>
+          </Card>
 
           {/* Transfer Progress */}
           {transferProgress && (
